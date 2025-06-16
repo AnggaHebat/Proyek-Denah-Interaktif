@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Media Digital - Proyek Denah Interaktif</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            touch-action: manipulation; /* Mencegah zoom saat double-tap di mobile */
+        }
+        #grid-container {
+            display: grid;
+            grid-template-columns: repeat(15, 1fr);
+            grid-template-rows: repeat(15, 1fr);
+            border: 2px solid #e2e8f0;
+            width: 100%;
+            max-width: 600px;
+            aspect-ratio: 1 / 1;
+        }
+        .grid-cell {
+            border: 1px solid #f1f5f9;
+            background-color: #ffffff;
+            cursor: pointer;
+            transition: background-color 0.1s ease;
+        }
+        .grid-cell.active {
+            background-color: #3b82f6; /* Warna default */
+            border: 1px solid transparent;
+        }
+        .color-swatch {
+            width: 40px;
+            height: 40px;
+            border-radius: 9999px;
+            cursor: pointer;
+            border: 3px solid transparent;
+            transition: border-color 0.2s;
+        }
+        .color-swatch.selected {
+            border-color: #0284c7;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div id="capture-area" class="w-full max-w-5xl bg-gray-100 p-8 rounded-lg">
+        <!-- Header -->
+        <header class="text-center mb-6">
+            <h1 class="text-3xl md:text-4xl font-extrabold text-gray-800">Proyek Denah Interaktif</h1>
+            <p class="text-md text-gray-600">Klik pada petak untuk membuat denah. Luas dan Keliling akan terhitung otomatis.</p>
+        </header>
+
+        <div class="flex flex-col lg:flex-row gap-8">
+            
+            <!-- Panel Kontrol -->
+            <aside class="lg:w-1/4 order-2 lg:order-1 flex flex-row lg:flex-col gap-4">
+                <div class="bg-white p-4 rounded-xl shadow-md w-full">
+                    <h2 class="font-bold text-lg mb-3 text-center">Hasil Perhitungan</h2>
+                    <div class="space-y-3 text-center">
+                        <div>
+                            <p class="text-sm text-gray-500">Luas Denah</p>
+                            <p id="area-display" class="text-4xl font-bold text-blue-600">0</p>
+                            <p class="text-xs text-gray-400">petak satuan</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500">Keliling Denah</p>
+                            <p id="perimeter-display" class="text-4xl font-bold text-green-600">0</p>
+                            <p class="text-xs text-gray-400">petak satuan</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white p-4 rounded-xl shadow-md w-full">
+                     <h2 class="font-bold text-lg mb-3 text-center">Pilih Warna</h2>
+                     <div id="color-palette" class="flex flex-wrap justify-center gap-3">
+                        <!-- Swatches warna akan ditambahkan oleh JS -->
+                     </div>
+                </div>
+
+                <div class="flex flex-col gap-3 w-full">
+                    <button id="download-button" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105 w-full">
+                        Download Laporan
+                    </button>
+                    <button id="reset-button" class="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105 w-full">
+                        Ulangi / Reset
+                    </button>
+                </div>
+            </aside>
+
+            <!-- Grid Area -->
+            <main class="lg:w-3/4 order-1 lg:order-2 flex justify-center items-center">
+                <div id="grid-container">
+                    <!-- Sel-sel grid akan dibuat oleh JS -->
+                </div>
+            </main>
+        </div>
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const gridContainer = document.getElementById('grid-container');
+    const areaDisplay = document.getElementById('area-display');
+    const perimeterDisplay = document.getElementById('perimeter-display');
+    const resetButton = document.getElementById('reset-button');
+    const downloadButton = document.getElementById('download-button');
+    const colorPaletteContainer = document.getElementById('color-palette');
+    const captureArea = document.getElementById('capture-area');
+
+    const gridSize = 15;
+    const colors = ['#3b82f6', '#22c55e', '#f97316', '#eab308', '#8b5cf6', '#ec4899'];
+    let selectedColor = colors[0];
+    let isMouseDown = false;
+
+    // Membuat palet warna
+    colors.forEach((color, index) => {
+        const swatch = document.createElement('div');
+        swatch.className = 'color-swatch';
+        swatch.style.backgroundColor = color;
+        swatch.dataset.color = color;
+        if (index === 0) {
+            swatch.classList.add('selected');
+        }
+        swatch.addEventListener('click', () => {
+            selectedColor = color;
+            document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+            swatch.classList.add('selected');
+        });
+        colorPaletteContainer.appendChild(swatch);
+    });
+
+    // Membuat grid
+    for (let i = 0; i < gridSize * gridSize; i++) {
+        const cell = document.createElement('div');
+        cell.classList.add('grid-cell');
+        cell.dataset.row = Math.floor(i / gridSize);
+        cell.dataset.col = i % gridSize;
+        gridContainer.appendChild(cell);
+    }
+
+    const cells = Array.from(gridContainer.children);
+
+    function handleCellInteraction(cell) {
+        if (cell.classList.contains('active') && cell.style.backgroundColor === selectedColor) {
+            cell.classList.remove('active');
+            cell.style.backgroundColor = '';
+        } else {
+            cell.classList.add('active');
+            cell.style.backgroundColor = selectedColor;
+        }
+        updateCalculations();
+    }
+
+    // Event listeners untuk menggambar
+    gridContainer.addEventListener('mousedown', (e) => {
+        isMouseDown = true;
+        const cell = e.target;
+        if (cell.classList.contains('grid-cell')) {
+            handleCellInteraction(cell);
+        }
+    });
+
+    gridContainer.addEventListener('mouseover', (e) => {
+        if (isMouseDown && e.target.classList.contains('grid-cell')) {
+            const cell = e.target;
+            if (!cell.classList.contains('active')) {
+                 cell.classList.add('active');
+                 cell.style.backgroundColor = selectedColor;
+                 updateCalculations();
+            }
+        }
+    });
+    
+    document.addEventListener('mouseup', () => {
+        isMouseDown = false;
+        updateCalculations();
+    });
+    
+    // Event listeners untuk sentuhan
+    gridContainer.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        isMouseDown = true;
+    }, { passive: false });
+
+    gridContainer.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        isMouseDown = false;
+        updateCalculations();
+    }, { passive: false });
+
+    gridContainer.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        if (isMouseDown) {
+            const touch = e.touches[0];
+            const element = document.elementFromPoint(touch.clientX, touch.clientY);
+            if (element && element.classList.contains('grid-cell')) {
+                const cell = element;
+                if (!cell.classList.contains('active')) {
+                     cell.classList.add('active');
+                     cell.style.backgroundColor = selectedColor;
+                     updateCalculations();
+                }
+            }
+        }
+    }, { passive: false });
+
+    function updateCalculations() {
+        const activeCells = cells.filter(cell => cell.classList.contains('active'));
+        const area = activeCells.length;
+        areaDisplay.textContent = area;
+        let perimeter = 0;
+        activeCells.forEach(cell => {
+            const row = parseInt(cell.dataset.row);
+            const col = parseInt(cell.dataset.col);
+            if (row === 0 || !cells[((row - 1) * gridSize) + col].classList.contains('active')) perimeter++;
+            if (row === gridSize - 1 || !cells[((row + 1) * gridSize) + col].classList.contains('active')) perimeter++;
+            if (col === 0 || !cells[(row * gridSize) + (col - 1)].classList.contains('active')) perimeter++;
+            if (col === gridSize - 1 || !cells[(row * gridSize) + (col + 1)].classList.contains('active')) perimeter++;
+        });
+        perimeterDisplay.textContent = perimeter;
+    }
+
+    resetButton.addEventListener('click', () => {
+        cells.forEach(cell => {
+            cell.classList.remove('active');
+            cell.style.backgroundColor = '';
+        });
+        updateCalculations();
+    });
+    
+    // Fungsi Download Keseluruhan
+    downloadButton.addEventListener('click', () => {
+        // Menggunakan html2canvas untuk mengambil screenshot dari elemen #capture-area
+        html2canvas(captureArea, { 
+            backgroundColor: '#f9fafb', // Sesuaikan dengan bg body
+            useCORS: true // Untuk memastikan gambar dimuat dengan benar jika ada
+        }).then(canvas => {
+            // Membuat link dan trigger download
+            const link = document.createElement('a');
+            link.download = 'laporan-denah-interaktif.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        });
+    });
+});
+</script>
+</body>
+</html>
+        
